@@ -1,0 +1,66 @@
+//Arduino IDE C++
+// Definindo as notas MIDI correspondentes aos pinos analógicos
+const int NUM_PORTAS_ANALOGICAS = 8;
+int notas[NUM_PORTAS_ANALOGICAS] = {
+  60, // C4
+  62, // D4
+  64, // E4
+  65, // F4
+  67, // G4
+  69, // A4
+  71, // B4
+  72  // C5
+};
+
+// Definindo os pinos analógicos
+const int pinosPortas[NUM_PORTAS_ANALOGICAS] = {
+  A0, A2, A4, A5, A7, A9, A11, A12
+};
+
+// Threshold para detecção de batidas
+const int threshold = 512;
+
+// Para evitar repetição de notas
+bool estadoAnterior[NUM_PORTAS_ANALOGICAS] = {false};
+
+// Debounce para garantir leituras estáveis
+const unsigned long debounceDelay = 100;  // milissegundos
+unsigned long ultimoTempo[NUM_PORTAS_ANALOGICAS] = {0};
+
+void setup() {
+  // Inicializa a comunicação serial para o Hairless MIDI
+  Serial.begin(115200); // Ajuste a velocidade de acordo com as configurações do Hairless MIDI
+
+  // Configura os pinos analógicos como entradas
+  for (int i = 0; i < NUM_PORTAS_ANALOGICAS; i++) {
+    pinMode(pinosPortas[i], INPUT);
+  }
+}
+
+void loop() {
+  unsigned long tempoAtual = millis();
+
+  // Verifica cada porta analógica para detectar uma batida
+  for (int i = 0; i < NUM_PORTAS_ANALOGICAS; i++) {
+    int valor = analogRead(pinosPortas[i]);
+
+    // Se a leitura for maior que o limite e a nota não estiver tocando, toca a nota correspondente e envia via Serial
+    if (valor > threshold && !estadoAnterior[i] && (tempoAtual - ultimoTempo[i] > debounceDelay)) {
+      sendMIDI(notas[i], 127); // Note On
+      estadoAnterior[i] = true;
+      ultimoTempo[i] = tempoAtual;
+    }
+    // Se a leitura for menor que o limite e a nota estava tocando, envia a nota Off
+    else if (valor <= threshold && estadoAnterior[i]) {
+      sendMIDI(notas[i], 0); // Note Off
+      estadoAnterior[i] = false;
+    }
+  }
+}
+  
+void sendMIDI(byte note, byte velocity) {
+  Serial.write(0x90); // Note On status byte for channel 1
+  Serial.write(note); // Note number
+  Serial.write(velocity); // Note velocity
+  delay(200);
+}
